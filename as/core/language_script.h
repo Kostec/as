@@ -90,6 +90,8 @@ struct ILanguageScript
                              llvm::orc::JITDylib& lib,
                              llvm::Module& module,
                              llvm::LLVMContext& context) = 0;
+    virtual void materialize(const std::shared_ptr<llvm::orc::LLJIT>& jit, llvm::orc::JITDylib& lib,
+                             llvm::Module& module, llvm::orc::ThreadSafeContext ts_context) {}
 };
 
 } // namespace as

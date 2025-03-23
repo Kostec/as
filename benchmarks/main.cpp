@@ -5,10 +5,14 @@
 #include <string>
 #include <chrono>
 #include <iostream>
+#include <filesystem>
 
 #include "lua/lua_5_4_6//runner.h"
 #include "lua/lua_as/runner.h"
 #include "lua/lua_jit/runner.h"
+
+#include "as/core/core_exports.h"
+#include "as/languages/lua/lua_exports.h"
 
 #include "native_runner.h"
 
@@ -83,8 +87,12 @@ enum class Calls
 };
 
 std::tuple<std::string, std::string, Calls> call_tests[] = {
-    {"a + b", "../../benchmarks/lua/scripts/test_calls.lua", Calls::Add},
-    {"not a", "../../benchmarks/lua/scripts/test_calls.lua", Calls::Not},
+        {"a + b",
+         std::filesystem::weakly_canonical("../../benchmarks/lua/scripts/test_calls.lua").make_preferred().string(),
+         Calls::Add},
+        {"not a",
+         std::filesystem::weakly_canonical("../../benchmarks/lua/scripts/test_calls.lua").make_preferred().string(),
+         Calls::Not},
 };
 
 void run_calls()

@@ -34,45 +34,52 @@ void ScriptModuleCompile::dump(llvm::raw_ostream& stream) const
     stream << *m_module;
 }
 
+static llvm::orc::JITDylib* createJitLib(std::shared_ptr<llvm::orc::LLJIT>& jit, std::string export_name)
+{
+    llvm::outs() << "CreateJitLib: " << export_name << "\n";
+    auto jd = jit->createJITDylib(export_name);
+    if (!jd)
+    {
+        llvm::errs() << "Cannot create " << export_name << " library." << jd.takeError() << "\n ";
+        return nullptr;
+    }
+
+    if (jd)
+    {
+        llvm::outs() << "Add MainJITDyLib" << "\n";
+        jd->addToLinkOrder(jit->getMainJITDylib());
+    }
+    return &(jd.get());
+}
+
 llvm::orc::JITDylib* ScriptModuleCompile::getModuleLib(std::shared_ptr<llvm::orc::LLJIT>& jit)
 {
+    llvm::outs() << "getModuleLib: " << m_export_name << "\n";
     auto jd = jit->getJITDylibByName(m_export_name);
     if (!jd)
     {
-        auto error_jd = jit->createJITDylib(m_export_name);
-        if (!error_jd)
-        {
-            llvm::errs() << "Cannot create new library. " << error_jd.takeError() << "\n";
-            return nullptr;
-        }
-
-        error_jd.get().addToLinkOrder(jit->getMainJITDylib());
-        return &(error_jd.get());
+        jd = createJitLib(jit, m_export_name);
+        return jd;
     }
 
+    llvm::outs() << "Clear existing library " << m_export_name << "\n";
     auto error_jd_clear = jd->clear();
     if (error_jd_clear)
     {
-        llvm::errs() << "Cannot clear existing library. " << error_jd_clear << "\n";
+        llvm::errs() << "Cannot clear existing" << m_export_name << " library." << error_jd_clear << "\n ";
         return nullptr;
     }
 
+    llvm::outs() << "Remove existing library " << m_export_name << "\n";
     auto error_remove = jit->getExecutionSession().removeJITDylib(*jd);
     if (error_remove)
     {
-        llvm::errs() << "Cannot remove existing library. " << error_remove << "\n";
+        llvm::errs() << "Cannot remove existing " << m_export_name << " library. " << error_remove << "\n";
         return nullptr;
     }
 
-    auto error_jd2 = jit->createJITDylib(m_export_name);
-    if (!error_jd2)
-    {
-        llvm::errs() << "Cannot create new library to replace. " << error_jd2.takeError() << "\n";
-        return nullptr;
-    }
-
-    error_jd2.get().addToLinkOrder(jit->getMainJITDylib());
-    return &(error_jd2.get());
+    jd = createJitLib(jit, m_export_name);
+    return jd;
 }
 
 InitFunction ScriptModuleCompile::materialize(std::shared_ptr<llvm::orc::LLJIT>& jit,
@@ -84,17 +91,29 @@ InitFunction ScriptModuleCompile::materialize(std::shared_ptr<llvm::orc::LLJIT>&
         return nullptr;
     }
 
+    const auto init_name = "init_" + m_export_name;
+
+    auto initFn = m_module.get()->getFunction(init_name);
+    if (!initFn)
+    {
+        llvm::outs() << initFn << " Not Found\n";
+    }
+
+    std::error_code error;
+    llvm::raw_fd_ostream ll_out_stream("__test.ll", error);
+    m_module->print(ll_out_stream, nullptr);
+
     auto& context = *ts_context.getContext();
     auto error_add = jit->addIRModule(*lib, llvm::orc::ThreadSafeModule(std::move(m_module), ts_context));
+    
     if (error_add)
     {
         llvm::errs() << "Cannot add module. " << error_add << "\n";
         return nullptr;
     }
 
-    m_language_script->materialize(jit, *lib, *m_module, context);
-
-    const auto init_name = "init_" + m_export_name;
+    m_language_script->materialize(jit, *lib, *m_module, ts_context);
+    
     auto init_func_addr = jit->lookup(*lib, init_name);
     if (!init_func_addr)
     {

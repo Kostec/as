@@ -31,6 +31,12 @@ void LuaIR::init(llvm::orc::ThreadSafeContext ts_context)
     auto lauxlibModule = utils::loadEmbeddedBitcode(context, "lauxlib_bc", lauxlib_bc, sizeof(lauxlib_bc));
     auto luaVMModule = utils::loadEmbeddedBitcode(context, "lua_vm_ops_bc", lua_vm_ops_bc, sizeof(lua_vm_ops_bc));
 
+    llvm::AttributeList attrList;
+    attrList = attrList.addFnAttribute(m_lapiModule->getContext(), llvm::Attribute::NoUnwind);
+    attrList = attrList.addFnAttribute(m_lapiModule->getContext(), llvm::Attribute::NoFree);
+    attrList = attrList.addFnAttribute(m_lapiModule->getContext(), llvm::Attribute::NoUndef);
+    auto extFnAttrlist = llvm::AttributeList::get(m_lapiModule->getContext(), attrList);
+
     // parse types & functions
     int8_t = llvm::Type::getInt8Ty(context);
     int16_t = llvm::Type::getInt16Ty(context);
@@ -122,6 +128,10 @@ void LuaIR::init(llvm::orc::ThreadSafeContext ts_context)
     vm_arith_tms_map[OP_POW] = TM_POW;
 
     prepareVMOpcodes(context);
+
+    std::error_code error;
+    llvm::raw_fd_ostream ll_out_stream("__luaApi.ll", error);
+    m_lapiModule->print(ll_out_stream, nullptr);
 }
 
 void LuaIR::prepareVMOpcodes(llvm::LLVMContext& context)

@@ -95,29 +95,58 @@ llvm::Function* LuaLanguageScript::buildCustomInitFunction(llvm::Module& module)
     return func;
 }
 
+void moduleOut(const std::string& guardTag, llvm::Module& module)
+{
+    llvm::outs() << "============== " << guardTag << "Start ==============" << "\n\r";
+    llvm::outs() << module << "\n\r";
+    llvm::outs() << "============== " << guardTag << "End ==============" << "\n\r";
+}
+
 llvm::Function* LuaLanguageScript::buildModule(const std::string& init_name,
     const std::string& module_name,
     const ScriptInterface& interface,
     const std::unordered_map<std::string, std::shared_ptr<ScriptInterface>>& externalRequires,
     llvm::Module& module)
 {
+    //std::error_code error;
+    //llvm::raw_fd_ostream ll_out_stream("__buildModule.ll", error);
+    //module.print(ll_out_stream, nullptr);
+
     LuaLocalState localLua;
     auto& context = module.getContext();
 
     Proto* proto = loadLuaProto(localLua.get(), m_filename, m_dumpCompiled);
 
     m_functionTree = m_llvmCompiler->compile(context, module, m_lua_ir, localLua.get(), proto);
+
+    //moduleOut("FunctionTree", module);
+
     m_ftreeRootGlobal = buildFunctionTreeIR(m_functionTree, m_lua_ir, module);
+
+    //moduleOut("buildFunctionTreeIR", module);
+
     m_metatablesListGlobal = LuaExternMetatables::buildIR(externalRequires, m_lua_ir, module);
+
+    //moduleOut("buildIR", module);
 
     m_luaStateGlobalVar = new llvm::GlobalVariable(module, m_lua_ir->lua_State_ptr_t, false, llvm::GlobalValue::PrivateLinkage,
                                                       llvm::ConstantPointerNull::get(m_lua_ir->void_ptr_t),
                                                       "__lua_state__");
 
+    //moduleOut("m_luaStateGlobalVar", module);
+
     const auto customInitFunction = buildCustomInitFunction(module);
 
+    //moduleOut("buildCustomInitFunction", module);
+
     const auto vtable = ir::buildVTable(module_name, interface, module, &LuaLanguageScript::buildFunction, this);
+
+    //moduleOut("buildVTable", module);
+
     ir::addMissingDeclarations(module);
+
+    //moduleOut("addMissingDeclarations", module);
+
     const auto init_func =  ir::createInitFunc(module, init_name, module_name, vtable, m_luaStateGlobalVar, "lua_runtime", customInitFunction);
 
     if (m_dumpCompiled)
@@ -125,7 +154,10 @@ llvm::Function* LuaLanguageScript::buildModule(const std::string& init_name,
         llvm::errs() << module;
     }
 
-//    llvm::verifyModule(module, &llvm::errs());
+    /*if (llvm::verifyModule(module, &llvm::errs()))
+    {
+        llvm::outs() << module << "\n\r";
+    }*/
 
     return init_func;
 }
@@ -191,7 +223,15 @@ llvm::Function* LuaLanguageScript::buildFunction(
 void LuaLanguageScript::materialize(const std::shared_ptr<llvm::orc::LLJIT>& jit, llvm::orc::JITDylib& lib,
         llvm::Module& module, llvm::LLVMContext& context)
 {
-//    m_llvmCompiler->materialize(jit, lib, m_func_names);
+
+    //    m_llvmCompiler->materialize(jit, lib, m_func_names);
+}
+
+void LuaLanguageScript::materialize(const std::shared_ptr<llvm::orc::LLJIT>& jit, llvm::orc::JITDylib& lib,
+    llvm::Module& module,
+    llvm::orc::ThreadSafeContext ts_context)
+{
+    jit->addIRModule(lib, llvm::orc::ThreadSafeModule(std::move(m_lua_ir->m_lapiModule), ts_context));
 }
 
 } // namespace as

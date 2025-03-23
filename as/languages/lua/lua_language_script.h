@@ -50,6 +50,8 @@ public:
             const std::shared_ptr<llvm::orc::LLJIT>& jit,
             llvm::orc::JITDylib& lib,
             llvm::Module& module, llvm::LLVMContext& context) override;
+    void materialize(const std::shared_ptr<llvm::orc::LLJIT>& jit, llvm::orc::JITDylib& lib,
+                                        llvm::Module& module, llvm::orc::ThreadSafeContext ts_context) override;
 
 private:
     bool m_dumpCompiled = false;

@@ -41,6 +41,8 @@ struct OPFunction
 
 class LuaIR
 {
+    friend class LuaLanguageScript;
+
 public:
     constexpr static const char* LUA_MAIN_IR_MODULE = "__lua_main_module__";
 
@@ -115,8 +117,9 @@ public:
 
     OPFunctionVariant* getOpcodeVariant(int opcode, hint_t hint_mask);
 
-private:
     std::unique_ptr<llvm::Module> m_lapiModule;
+
+private:
 
     // lua vm opcode functions
     OPFunction op_functions[NUM_OPCODES];

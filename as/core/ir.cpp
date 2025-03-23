@@ -313,6 +313,12 @@ void addMissingDeclarations(llvm::Module& module)
         declaredFunctions.insert(func.getName().str());
     }
 
+    llvm::AttributeList attrList;
+    attrList = attrList.addFnAttribute(module.getContext(), llvm::Attribute::NoUnwind);
+    attrList = attrList.addFnAttribute(module.getContext(), llvm::Attribute::NoFree);
+    attrList = attrList.addFnAttribute(module.getContext(), llvm::Attribute::NoUndef);
+    auto ctxAttrlist = llvm::AttributeList::get(module.getContext(), attrList);
+
     for (llvm::Function& func : module)
     {
         for (llvm::BasicBlock& block : func)
@@ -328,7 +334,11 @@ void addMissingDeclarations(llvm::Module& module)
                         if (declaredFunctions.find(funcName) == declaredFunctions.end())
                         {
                             llvm::FunctionType* funcType = calledFunc->getFunctionType();
-                            module.getOrInsertFunction(funcName, funcType);
+
+                            auto fn = llvm::Function::Create(funcType, llvm::Function::ExternalLinkage, funcName, &module);
+                            fn->setUnnamedAddr(llvm::GlobalValue::UnnamedAddr::Local);
+                            fn->setAttributes(ctxAttrlist);
+
                             declaredFunctions.insert(funcName);
                         }
                     }
